@@ -553,12 +553,13 @@ defmodule RanktrationTest do
       times = Enum.map(results, & &1.avg_time)
       min_time = Enum.min(times)
       max_time = Enum.max(times)
+      diff = max_time - min_time
 
-      case max_time - min_time do
-        # All times equal
-        0.0 -> 1.0
-        # Higher score for lower time
-        diff -> 1.0 - (time - min_time) / diff
+      # Handle case where all times are equal (avoid 0.0 pattern match)
+      if abs(diff) < 1.0e-10 do
+        1.0
+      else
+        1.0 - (time - min_time) / diff
       end
     end
   end

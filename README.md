@@ -9,13 +9,23 @@ end
 ```
 
 ```elixir
+# Type-safe approach using Metrics struct
+metrics_a = Ranktration.Metrics.new(speed: 0.9, accuracy: 0.8)
+metrics_b = Ranktration.Metrics.new(speed: 0.7, accuracy: 0.95)
+
 trajectories = [
-  Ranktration.TrajectoryResult.new("method_a", "bench", %{"speed" => 0.9, "accuracy" => 0.8}),
-  Ranktration.TrajectoryResult.new("method_b", "bench", %{"speed" => 0.7, "accuracy" => 0.95})
+  Ranktration.TrajectoryResult.new("method_a", "bench", metrics_a),
+  Ranktration.TrajectoryResult.new("method_b", "bench", metrics_b)
 ]
 
 evaluator = Ranktration.RulerCore.new(metric_weights: %{"speed" => 0.6, "accuracy" => 0.4})
 result = Ranktration.RulerCore.evaluate_trajectories(evaluator, trajectories, "bench")
+
+# Or using string-based maps (backward compatible)
+trajectories = [
+  Ranktration.TrajectoryResult.new("method_a", "bench", %{"speed" => 0.9, "accuracy" => 0.8}),
+  Ranktration.TrajectoryResult.new("method_b", "bench", %{"speed" => 0.7, "accuracy" => 0.95})
+]
 ```
 
 ## API

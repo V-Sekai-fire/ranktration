@@ -51,6 +51,101 @@ defmodule Ranktration do
   - Compiler optimization comparisons
   """
 
+  defmodule Metrics do
+    @moduledoc """
+    Structured metrics with compile-time validation for type safety.
+
+    ## Common Metrics
+    - `speed`: Execution speed (higher = better)
+    - `accuracy`: Accuracy/correctness (higher = better)
+    - `correctness`: Boolean accuracy (0.0 or 1.0)
+    - `stability`: Algorithm stability (higher = better)
+    - `execution_time`: Raw execution time (higher = slower, converted internally)
+    - `space_efficiency`: Memory efficiency (higher = better)
+
+    ## Custom Metrics
+    Use the `custom` field for domain-specific metrics as `%{:your_metric => value}`.
+    """
+
+    @type t :: %__MODULE__{
+      speed: float() | nil,
+      accuracy: float() | nil,
+      correctness: float() | nil,
+      stability: float() | nil,
+      execution_time: float() | nil,
+      space_efficiency: float() | nil,
+      custom: %{atom() => float()} | nil
+    }
+
+    defstruct [
+      :speed,
+      :accuracy,
+      :correctness,
+      :stability,
+      :execution_time,
+      :space_efficiency,
+      custom: %{}
+    ]
+
+    @spec new(keyword() | map()) :: t()
+    def new(attrs \\ []) do
+      struct!(__MODULE__, attrs)
+    end
+
+    @spec validate(t()) :: :ok | {:error, String.t()}
+    def validate(%__MODULE__{} = metrics) do
+      # Check all numeric fields are valid 0.0-1.0 floats
+      fields_to_check = [:speed, :accuracy, :correctness, :stability, :execution_time, :space_efficiency]
+
+      Enum.each(fields_to_check, fn field ->
+        value = Map.get(metrics, field)
+        validate_metric_value(field, value)
+      end)
+
+      # Check custom metrics
+      if metrics.custom do
+        Enum.each(metrics.custom, fn {key, value} ->
+          unless is_atom(key) do
+            raise ArgumentError, "Custom metric keys must be atoms, got: #{inspect(key)}"
+          end
+          validate_metric_value(key, value)
+        end)
+      end
+
+      :ok
+    end
+
+    @spec get(t(), atom(), float()) :: float()
+    def get(%__MODULE__{} = metrics, key, default \\ 0.0) do
+      Map.get(metrics, key) || Map.get(metrics.custom || %{}, key, default)
+    end
+
+    @spec has_metric?(t(), atom()) :: boolean()
+    def has_metric?(%__MODULE__{} = metrics, key) do
+      Map.has_key?(metrics, key) || Map.has_key?(metrics.custom || %{}, key)
+    end
+
+    @spec to_map(t()) :: %{String.t() => float()}
+    def to_map(%__MODULE__{} = metrics) do
+      # Convert struct to string-keyed map for backward compatibility
+      metrics
+      |> Map.from_struct()
+      |> Map.delete(:__struct__)
+      |> Map.delete(:custom)
+      |> Map.merge(metrics.custom || %{})
+      |> Enum.filter(fn {_k, v} -> v != nil end)
+      |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
+    end
+
+    @spec validate_metric_value(atom() | String.t(), any()) :: :ok
+    defp validate_metric_value(name, value) do
+      unless value == nil or (is_float(value) and value >= 0.0 and value <= 1.0) do
+        raise ArgumentError, "Metric #{inspect(name)} must be a float between 0.0 and 1.0, got: #{inspect(value)}"
+      end
+      :ok
+    end
+  end
+
   defmodule TrajectoryResult do
     @moduledoc """
     Structure representing a completed trajectory with quality scores.
@@ -79,12 +174,22 @@ defmodule Ranktration do
       :timestamp
     ]
 
-    @spec new(String.t(), String.t(), %{String.t() => float()}, map()) :: t()
+    @spec new(String.t(), String.t(), %{String.t() => float()} | Metrics.t(), map()) :: t()
     def new(trajectory_id, content_id, quality_scores, metadata \\ %{}) do
+      quality_scores_map = case quality_scores do
+        %Metrics{} = struct ->
+          Metrics.validate(struct)  # Validate the struct
+          Metrics.to_map(struct)   # Convert to string-based map for internal use
+        %{} = map ->
+          validate_scores(map)
+        _ ->
+          raise ArgumentError, "quality_scores must be a Metrics struct or a string-keyed map"
+      end
+
       %__MODULE__{
         trajectory_id: trajectory_id,
         content_id: content_id,
-        quality_scores: validate_scores(quality_scores),
+        quality_scores: quality_scores_map,
         metadata: metadata,
         timestamp: DateTime.utc_now()
       }
