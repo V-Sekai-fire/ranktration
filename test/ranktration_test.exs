@@ -454,14 +454,6 @@ defmodule RanktrationTest do
       all_scores = Map.values(ranking_result.scores)
       # All algorithms should have valid scores
       assert Enum.all?(all_scores, &(&1 >= 0.0 and &1 <= 1.0))
-
-      # Quick demonstration of ranking
-      IO.puts("\nReal Sorting Algorithm Rankings:")
-
-      Enum.each(ranking_result.rankings, fn alg ->
-        score = ranking_result.scores[alg]
-        IO.puts("#{alg}: #{Float.round(score, 3)}")
-      end)
     end
 
     # Helper to normalize execution time (faster = higher score)

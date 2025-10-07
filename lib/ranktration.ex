@@ -346,7 +346,7 @@ defmodule Ranktration do
       pairwise_comparisons = compare_all_trajectories(ruler, sampled_trajectories)
 
       # Calculate ranking on full dataset using sample results
-      rankings = calculate_full_ranking_from_sample(trajectories, pairwise_comparisons)
+      rankings = calculate_full_ranking_from_sample(ruler, trajectories, pairwise_comparisons)
       scores = calculate_sample_based_scores(ruler, trajectories, pairwise_comparisons)
 
       # Analyze consensus and stability
@@ -469,25 +469,7 @@ defmodule Ranktration do
       |> Enum.map(fn {id, _wins} -> id end)
     end
 
-    @spec calculate_final_scores(t(), [TrajectoryResult.t()], [TrajectoryComparison.t()]) :: %{
-            String.t() => float()
-          }
-    defp calculate_final_scores(ruler, trajectories, comparisons) do
-      trajectory_ids = Enum.map(trajectories, & &1.trajectory_id)
-      rankings = calculate_consensus_ranking(comparisons)
 
-      Enum.reduce(trajectory_ids, %{}, fn traj_id, acc ->
-        # Base score from weighted metrics
-        traj = Enum.find(trajectories, &(&1.trajectory_id == traj_id))
-        base_score = calculate_weighted_score(ruler, traj.quality_scores)
-
-        # Ranking bonus (higher ranking gets small bonus)
-        rank_position = Enum.find_index(rankings, &(&1 == traj_id)) || length(rankings)
-        ranking_bonus = (length(rankings) - rank_position) / length(rankings) * 0.05
-
-        Map.put(acc, traj_id, min(1.0, base_score + ranking_bonus))
-      end)
-    end
 
     @spec analyze_consensus([TrajectoryComparison.t()]) :: map()
     defp analyze_consensus(comparisons) do
@@ -536,8 +518,8 @@ defmodule Ranktration do
       end
     end
 
-    @spec calculate_full_ranking_from_sample([TrajectoryResult.t()], [TrajectoryComparison.t()]) :: [String.t()]
-    defp calculate_full_ranking_from_sample(all_trajectories, sample_comparisons) do
+    @spec calculate_full_ranking_from_sample(t(), [TrajectoryResult.t()], [TrajectoryComparison.t()]) :: [String.t()]
+    defp calculate_full_ranking_from_sample(ruler, all_trajectories, sample_comparisons) do
       # Get sample trajectory IDs that were actually compared
       sample_ids =
         sample_comparisons
@@ -559,16 +541,17 @@ defmodule Ranktration do
         top_sample = Enum.find(all_trajectories, fn t -> t.trajectory_id == top_sample_id end)
 
         if top_sample do
-          # Create a pseudo-comparison for each unsampled trajectory vs top sample
+          # Rank unsampled trajectories using proper weighted scoring with original ruler
           unsampled_rankings =
             unsampled_trajectories
             |> Enum.map(fn traj ->
-              # Compare against top performing sample trajectory
-              comparison = compare_trajectory_pair(%__MODULE__{}, traj, top_sample)
-              {traj.trajectory_id, comparison.margin}
+              # Use the original ruler for proper weighted scoring
+              # Higher weighted score means better performance
+              weighted_score = calculate_weighted_score(ruler, traj.quality_scores)
+              {traj.trajectory_id, weighted_score}
             end)
-            |> Enum.sort_by(fn {_id, margin} -> margin end, :desc)  # Higher margin means better
-            |> Enum.map(fn {id, _margin} -> id end)
+            |> Enum.sort_by(fn {_id, score} -> -score end)  # Sort by score descending (higher = better)
+            |> Enum.map(fn {id, _score} -> id end)
 
           sample_rankings ++ unsampled_rankings
         else
@@ -586,7 +569,7 @@ defmodule Ranktration do
           }
     defp calculate_sample_based_scores(ruler, trajectories, sample_comparisons) do
       # Calculate scores for all trajectories using sample-based ranking
-      rankings = calculate_full_ranking_from_sample(trajectories, sample_comparisons)
+      rankings = calculate_full_ranking_from_sample(ruler, trajectories, sample_comparisons)
 
       Enum.reduce(trajectories, %{}, fn traj, acc ->
         # Base score from weighted metrics (full calculation for accuracy)
