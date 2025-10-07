@@ -119,7 +119,7 @@ MIT License - see LICENSE file for details.
 
 ## Credit
 
-This implementation is inspired by and derived from the [RULER (Robust Unified Learning Evaluation & Ranking)](https://art.openpipe.ai/fundamentals/ruler) framework originally developed by OpenPipe for content ranking and trajectory analysis.
+This implementation is inspired by and derived from the [RULER (Robust Unified Learning Evaluation & Ranking)](https://art.openpipe.ai/fundamentals/ruler) framework originally developed by OpenPipe for AI evaluation and trajectory analysis in machine learning.
 
 ## Contact
 
