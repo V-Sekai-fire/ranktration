@@ -84,15 +84,15 @@ defmodule Ranktration do
     """
 
     @type t :: %__MODULE__{
-      speed: float() | nil,
-      accuracy: float() | nil,
-      correctness: float() | nil,
-      stability: float() | nil,
-      robustness: float() | nil,
-      execution_time: float() | nil,
-      space_efficiency: float() | nil,
-      custom: %{atom() => float()} | nil
-    }
+            speed: float() | nil,
+            accuracy: float() | nil,
+            correctness: float() | nil,
+            stability: float() | nil,
+            robustness: float() | nil,
+            execution_time: float() | nil,
+            space_efficiency: float() | nil,
+            custom: %{atom() => float()} | nil
+          }
 
     defstruct [
       :speed,
@@ -113,7 +113,15 @@ defmodule Ranktration do
     @spec validate(t()) :: :ok | {:error, String.t()}
     def validate(%__MODULE__{} = metrics) do
       # Check all numeric fields are valid 0.0-1.0 floats
-      fields_to_check = [:speed, :accuracy, :correctness, :stability, :robustness, :execution_time, :space_efficiency]
+      fields_to_check = [
+        :speed,
+        :accuracy,
+        :correctness,
+        :stability,
+        :robustness,
+        :execution_time,
+        :space_efficiency
+      ]
 
       Enum.each(fields_to_check, fn field ->
         value = Map.get(metrics, field)
@@ -126,6 +134,7 @@ defmodule Ranktration do
           unless is_atom(key) do
             raise ArgumentError, "Custom metric keys must be atoms, got: #{inspect(key)}"
           end
+
           validate_metric_value(key, value)
         end)
       end
@@ -158,8 +167,10 @@ defmodule Ranktration do
     @spec validate_metric_value(atom() | String.t(), any()) :: :ok
     defp validate_metric_value(name, value) do
       unless value == nil or (is_float(value) and value >= 0.0 and value <= 1.0) do
-        raise ArgumentError, "Metric #{inspect(name)} must be a float between 0.0 and 1.0, got: #{inspect(value)}"
+        raise ArgumentError,
+              "Metric #{inspect(name)} must be a float between 0.0 and 1.0, got: #{inspect(value)}"
       end
+
       :ok
     end
   end
@@ -194,18 +205,18 @@ defmodule Ranktration do
 
     @spec new(String.t(), String.t(), Metrics.t(), map()) :: t()
     def new(trajectory_id, content_id, %Metrics{} = metrics, metadata \\ %{}) do
-      Metrics.validate(metrics)  # Validate the struct
+      # Validate the struct
+      Metrics.validate(metrics)
 
       %__MODULE__{
         trajectory_id: trajectory_id,
         content_id: content_id,
-        quality_scores: Metrics.to_map(metrics),  # Convert to string-based map for internal use
+        # Convert to string-based map for internal use
+        quality_scores: Metrics.to_map(metrics),
         metadata: metadata,
         timestamp: DateTime.utc_now()
       }
     end
-
-
 
     @spec has_metric?(t(), String.t()) :: boolean()
     def has_metric?(%__MODULE__{quality_scores: scores}, metric),
@@ -309,7 +320,8 @@ defmodule Ranktration do
     @spec new(keyword()) :: t()
     def new(opts \\ []) do
       metric_weights = Keyword.get(opts, :metric_weights, %{})
-      sample_size = Keyword.get(opts, :sample_size, 100)  # Default sample size
+      # Default sample size
+      sample_size = Keyword.get(opts, :sample_size, 100)
       validate_metric_weights!(metric_weights)
 
       %__MODULE__{
@@ -469,8 +481,6 @@ defmodule Ranktration do
       |> Enum.map(fn {id, _wins} -> id end)
     end
 
-
-
     @spec analyze_consensus([TrajectoryComparison.t()]) :: map()
     defp analyze_consensus(comparisons) do
       # Calculate win distribution and other consensus metrics
@@ -518,7 +528,9 @@ defmodule Ranktration do
       end
     end
 
-    @spec calculate_full_ranking_from_sample(t(), [TrajectoryResult.t()], [TrajectoryComparison.t()]) :: [String.t()]
+    @spec calculate_full_ranking_from_sample(t(), [TrajectoryResult.t()], [
+            TrajectoryComparison.t()
+          ]) :: [String.t()]
     defp calculate_full_ranking_from_sample(ruler, all_trajectories, sample_comparisons) do
       # Get sample trajectory IDs that were actually compared
       sample_ids =
@@ -550,7 +562,8 @@ defmodule Ranktration do
               weighted_score = calculate_weighted_score(ruler, traj.quality_scores)
               {traj.trajectory_id, weighted_score}
             end)
-            |> Enum.sort_by(fn {_id, score} -> -score end)  # Sort by score descending (higher = better)
+            # Sort by score descending (higher = better)
+            |> Enum.sort_by(fn {_id, score} -> -score end)
             |> Enum.map(fn {id, _score} -> id end)
 
           sample_rankings ++ unsampled_rankings
@@ -564,9 +577,10 @@ defmodule Ranktration do
       end
     end
 
-    @spec calculate_sample_based_scores(t(), [TrajectoryResult.t()], [TrajectoryComparison.t()]) :: %{
-            String.t() => float()
-          }
+    @spec calculate_sample_based_scores(t(), [TrajectoryResult.t()], [TrajectoryComparison.t()]) ::
+            %{
+              String.t() => float()
+            }
     defp calculate_sample_based_scores(ruler, trajectories, sample_comparisons) do
       # Calculate scores for all trajectories using sample-based ranking
       rankings = calculate_full_ranking_from_sample(ruler, trajectories, sample_comparisons)
@@ -577,7 +591,11 @@ defmodule Ranktration do
 
         # Ranking bonus from sample-based tournament ranking
         rank_position = Enum.find_index(rankings, &(&1 == traj.trajectory_id))
-        ranking_bonus = if rank_position, do: (length(rankings) - rank_position) / length(rankings) * 0.05, else: 0.0
+
+        ranking_bonus =
+          if rank_position,
+            do: (length(rankings) - rank_position) / length(rankings) * 0.05,
+            else: 0.0
 
         Map.put(acc, traj.trajectory_id, min(1.0, base_score + ranking_bonus))
       end)

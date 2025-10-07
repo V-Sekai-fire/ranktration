@@ -71,17 +71,26 @@ defmodule RanktrationTest do
 
       # Test custom metrics with invalid values (> 1.0) - this gets validated during trajectory creation
       assert_raise ArgumentError, fn ->
-        TrajectoryResult.new("test", "content", Ranktration.Metrics.new(%{custom: %{custom_metric: 2.0}}))
+        TrajectoryResult.new(
+          "test",
+          "content",
+          Ranktration.Metrics.new(%{custom: %{custom_metric: 2.0}})
+        )
       end
 
       # Test custom metrics with invalid values (< 0.0)
       assert_raise ArgumentError, fn ->
-        TrajectoryResult.new("test", "content", Ranktration.Metrics.new(%{custom: %{custom_metric: -0.5}}))
+        TrajectoryResult.new(
+          "test",
+          "content",
+          Ranktration.Metrics.new(%{custom: %{custom_metric: -0.5}})
+        )
       end
 
       # Test invalid custom metric types separately by calling validate
       assert_raise ArgumentError, fn ->
-        %Ranktration.Metrics{custom: %{0 => 0.5}} |> Ranktration.Metrics.validate()  # Integer key
+        # Integer key
+        %Ranktration.Metrics{custom: %{0 => 0.5}} |> Ranktration.Metrics.validate()
       end
     end
 
@@ -218,7 +227,8 @@ defmodule RanktrationTest do
       ]
 
       result = RulerCore.evaluate_trajectories(ruler, trajectories, "test")
-      assert length(result.rankings) == 4  # All trajectories should be ranked
+      # All trajectories should be ranked
+      assert length(result.rankings) == 4
       assert length(result.pairwise_comparisons) > 0
     end
 
@@ -249,9 +259,12 @@ defmodule RanktrationTest do
       result = RulerCore.evaluate_trajectories(ruler, trajectories, "test")
       assert length(result.rankings) == 2
       # Scores should be weighted by accuracy with ranking bonus
-      assert_in_delta result.scores["a"], 0.85, 0.01  # ~1.0 * 0.8 + ranking bonus
-      assert_in_delta result.scores["b"], 0.63, 0.01  # ~1.0 * 0.6 + ranking bonus
-      assert result.scores["a"] > result.scores["b"]  # a should rank higher
+      # ~1.0 * 0.8 + ranking bonus
+      assert_in_delta result.scores["a"], 0.85, 0.01
+      # ~1.0 * 0.6 + ranking bonus
+      assert_in_delta result.scores["b"], 0.63, 0.01
+      # a should rank higher
+      assert result.scores["a"] > result.scores["b"]
     end
 
     test "handles edge case rank positions" do
@@ -270,8 +283,10 @@ defmodule RanktrationTest do
       assert Map.keys(result.scores) == ["equal_a", "equal_b", "equal_c"]
       # All should have close scores (tied base values with small ranking bonuses)
       scores = Map.values(result.scores)
-      assert Enum.all?(scores, &(&1 >= 0.5 and &1 <= 0.6))  # Should be around 0.5 + small bonus
-      assert length(result.pairwise_comparisons) == 3  # (3*2)/2 = 3 comparisons
+      # Should be around 0.5 + small bonus
+      assert Enum.all?(scores, &(&1 >= 0.5 and &1 <= 0.6))
+      # (3*2)/2 = 3 comparisons
+      assert length(result.pairwise_comparisons) == 3
     end
 
     test "handles exact sample size edge cases" do
@@ -288,6 +303,18 @@ defmodule RanktrationTest do
       assert length(result.rankings) == 3
       # Should do full pairwise comparisons: (3*2)/2 = 3 comparisons
       assert length(result.pairwise_comparisons) == 3
+    end
+
+    test "covers tie-breaker edge case" do
+      # Test tie-breaker that returns b.trajectory_id when b comes before a alphabetically
+      ruler = RulerCore.new(metric_weights: %{"accuracy" => 1.0})
+      traj_b = TrajectoryResult.new("a_traject", "test", %Ranktration.Metrics{accuracy: 0.5})
+      traj_a = TrajectoryResult.new("z_traject", "test", %Ranktration.Metrics{accuracy: 0.5})
+
+      # This should trigger the tie-breaker where b comes first alphabetically
+      comparison = RulerCore.compare_trajectory_pair(ruler, traj_a, traj_b)
+      # Should return b.trajectory_id since a > b alphabetically
+      assert comparison.preferred == "a_traject"
     end
   end
 
@@ -396,8 +423,6 @@ defmodule RanktrationTest do
       assert is_binary(comparison.preferred)
     end
   end
-
-
 
   defmodule SortingBenchmarks do
     @moduledoc false
@@ -578,20 +603,25 @@ defmodule RanktrationTest do
 
       # Run benchmarks in parallel for speed
       results =
-        Task.async_stream(algorithms, fn {name, sort_fn} ->
-          # Warm up
-          _warmup = sort_fn.(test_data)
+        Task.async_stream(
+          algorithms,
+          fn {name, sort_fn} ->
+            # Warm up
+            _warmup = sort_fn.(test_data)
 
-          # Single run for speed (vs 3 runs)
-          {time, result} = :timer.tc(fn -> sort_fn.(test_data) end, :microsecond)
+            # Single run for speed (vs 3 runs)
+            {time, result} = :timer.tc(fn -> sort_fn.(test_data) end, :microsecond)
 
-          %{
-            name: name,
-            avg_time: time / 1000.0,
-            correctness: if(result == Enum.sort(test_data), do: 1.0, else: 0.0),
-            stability: 1.0  # All tested algorithms are stable
-          }
-        end, max_concurrency: System.schedulers_online())
+            %{
+              name: name,
+              avg_time: time / 1000.0,
+              correctness: if(result == Enum.sort(test_data), do: 1.0, else: 0.0),
+              # All tested algorithms are stable
+              stability: 1.0
+            }
+          end,
+          max_concurrency: System.schedulers_online()
+        )
         |> Enum.map(fn {:ok, result} -> result end)
 
       # Create trajectories for RULER evaluation
