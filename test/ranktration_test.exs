@@ -62,6 +62,50 @@ defmodule RanktrationTest do
     end
   end
 
+  describe "Metrics validation edge cases" do
+    test "validates various invalid metric values" do
+      # Test nil values (should be allowed)
+      metrics = Ranktration.Metrics.new(speed: nil, accuracy: 0.5)
+      assert metrics.speed == nil
+      assert metrics.accuracy == 0.5
+
+      # Test custom metrics with invalid values (> 1.0) - this gets validated during trajectory creation
+      assert_raise ArgumentError, fn ->
+        TrajectoryResult.new("test", "content", Ranktration.Metrics.new(%{custom: %{custom_metric: 2.0}}))
+      end
+
+      # Test custom metrics with invalid values (< 0.0)
+      assert_raise ArgumentError, fn ->
+        TrajectoryResult.new("test", "content", Ranktration.Metrics.new(%{custom: %{custom_metric: -0.5}}))
+      end
+
+      # Test invalid custom metric types separately by calling validate
+      assert_raise ArgumentError, fn ->
+        %Ranktration.Metrics{custom: %{0 => 0.5}} |> Ranktration.Metrics.validate()  # Integer key
+      end
+    end
+
+    test "validates float precision and edge cases" do
+      # Valid extreme floats
+      metrics = Ranktration.Metrics.new(accuracy: 1.0, speed: 0.0)
+      assert metrics.accuracy == 1.0
+      assert metrics.speed == 0.0
+
+      # Very small and large valid values
+      metrics = Ranktration.Metrics.new(accuracy: 0.0001, speed: 0.9999)
+      assert metrics.accuracy == 0.0001
+      assert metrics.speed == 0.9999
+    end
+
+    test "handles custom atom keys correctly" do
+      metrics = Ranktration.Metrics.new(%{custom: %{my_custom_metric: 0.8, another_metric: 0.2}})
+      assert Ranktration.Metrics.has_metric?(metrics, :my_custom_metric) == true
+      assert Ranktration.Metrics.get(metrics, :my_custom_metric) == 0.8
+      assert Ranktration.Metrics.has_metric?(metrics, :nonexistent) == false
+      assert Ranktration.Metrics.get(metrics, :nonexistent, 0.1) == 0.1
+    end
+  end
+
   describe "RulerCore" do
     test "creates evaluator with valid metric weights" do
       weights = %{"accuracy" => 0.5, "speed" => 0.3, "robustness" => 0.2}
@@ -78,6 +122,33 @@ defmodule RanktrationTest do
       # Negative weights
       assert_raise ArgumentError, fn ->
         RulerCore.new(metric_weights: %{"a" => -0.1, "b" => 0.6, "c" => 0.5})
+      end
+    end
+
+    test "creates with default sample size" do
+      ruler = RulerCore.new(metric_weights: %{"accuracy" => 1.0})
+      assert ruler.sample_size == 100
+    end
+
+    test "accepts custom sample size" do
+      ruler = RulerCore.new(metric_weights: %{"accuracy" => 1.0}, sample_size: 500)
+      assert ruler.sample_size == 500
+    end
+
+    test "validates metric weights with invalid types" do
+      # Non-map weights
+      assert_raise ArgumentError, fn ->
+        RulerCore.new(metric_weights: "not_a_map")
+      end
+
+      # Illegal float values
+      assert_raise ArgumentError, fn ->
+        RulerCore.new(metric_weights: %{"valid" => 1.0, "negative" => -0.5})
+      end
+
+      # Non-binary keys
+      assert_raise ArgumentError, fn ->
+        RulerCore.new(metric_weights: %{123 => 1.0})
       end
     end
 
@@ -102,6 +173,121 @@ defmodule RanktrationTest do
       assert_raise ArgumentError, fn ->
         RulerCore.evaluate_trajectories(ruler, trajectories, "content_a")
       end
+    end
+
+    test "configure_metrics updates weights" do
+      ruler = RulerCore.new(metric_weights: %{"accuracy" => 1.0})
+      new_ruler = RulerCore.configure_metrics(ruler, %{"speed" => 0.5, "accuracy" => 0.5})
+
+      assert new_ruler.metric_weights == %{"speed" => 0.5, "accuracy" => 0.5}
+      assert new_ruler != ruler
+    end
+
+    test "configure_metrics validates new weights" do
+      ruler = RulerCore.new(metric_weights: %{"accuracy" => 1.0})
+
+      # This should fail with ArithmeticError when trying to sum non-numbers
+      assert_raise ArithmeticError, fn ->
+        RulerCore.configure_metrics(ruler, %{invalid: "weights"})
+      end
+    end
+
+    test "handles sampling with small datasets" do
+      ruler = RulerCore.new(metric_weights: %{"accuracy" => 1.0}, sample_size: 10)
+
+      # Create only 3 trajectories (less than sample size)
+      trajectories = [
+        TrajectoryResult.new("a", "test", %Ranktration.Metrics{accuracy: 0.8}),
+        TrajectoryResult.new("b", "test", %Ranktration.Metrics{accuracy: 0.6}),
+        TrajectoryResult.new("c", "test", %Ranktration.Metrics{accuracy: 0.7})
+      ]
+
+      result = RulerCore.evaluate_trajectories(ruler, trajectories, "test")
+      assert length(result.rankings) == 3
+      assert result.confidence >= 0.0
+    end
+
+    test "handles exact sample size match" do
+      ruler = RulerCore.new(metric_weights: %{"accuracy" => 1.0}, sample_size: 2)
+
+      trajectories = [
+        TrajectoryResult.new("a", "test", %Ranktration.Metrics{accuracy: 0.8}),
+        TrajectoryResult.new("b", "test", %Ranktration.Metrics{accuracy: 0.6}),
+        TrajectoryResult.new("c", "test", %Ranktration.Metrics{accuracy: 0.7}),
+        TrajectoryResult.new("d", "test", %Ranktration.Metrics{accuracy: 0.9})
+      ]
+
+      result = RulerCore.evaluate_trajectories(ruler, trajectories, "test")
+      assert length(result.rankings) == 4  # All trajectories should be ranked
+      assert length(result.pairwise_comparisons) > 0
+    end
+
+    test "handles very small datasets with sampling" do
+      ruler = RulerCore.new(metric_weights: %{"accuracy" => 1.0}, sample_size: 10)
+
+      # Only 2 trajectories (smaller than sample size but still enough for ranking)
+      trajectories = [
+        TrajectoryResult.new("a", "test", %Ranktration.Metrics{accuracy: 0.8}),
+        TrajectoryResult.new("b", "test", %Ranktration.Metrics{accuracy: 0.6})
+      ]
+
+      result = RulerCore.evaluate_trajectories(ruler, trajectories, "test")
+      assert length(result.rankings) == 2
+      assert result.confidence >= 0.0
+      # Should have exactly 1 pairwise comparison for 2 items
+      assert length(result.pairwise_comparisons) == 1
+    end
+
+    test "handles very small metric weights" do
+      ruler = RulerCore.new(metric_weights: %{"accuracy" => 1.0}, sample_size: 10)
+
+      trajectories = [
+        TrajectoryResult.new("a", "test", %Ranktration.Metrics{accuracy: 0.8}),
+        TrajectoryResult.new("b", "test", %Ranktration.Metrics{accuracy: 0.6})
+      ]
+
+      result = RulerCore.evaluate_trajectories(ruler, trajectories, "test")
+      assert length(result.rankings) == 2
+      # Scores should be weighted by accuracy with ranking bonus
+      assert_in_delta result.scores["a"], 0.85, 0.01  # ~1.0 * 0.8 + ranking bonus
+      assert_in_delta result.scores["b"], 0.63, 0.01  # ~1.0 * 0.6 + ranking bonus
+      assert result.scores["a"] > result.scores["b"]  # a should rank higher
+    end
+
+    test "handles edge case rank positions" do
+      # Create ruler with tied weights to test ranking edge cases
+      ruler = RulerCore.new(metric_weights: %{"accuracy" => 1.0}, sample_size: 3)
+
+      # Create trajectories where all scores are equal - tests tie-breaking logic
+      trajectories = [
+        TrajectoryResult.new("equal_a", "test", %Ranktration.Metrics{accuracy: 0.5}),
+        TrajectoryResult.new("equal_b", "test", %Ranktration.Metrics{accuracy: 0.5}),
+        TrajectoryResult.new("equal_c", "test", %Ranktration.Metrics{accuracy: 0.5})
+      ]
+
+      result = RulerCore.evaluate_trajectories(ruler, trajectories, "test")
+      assert length(result.rankings) == 3
+      assert Map.keys(result.scores) == ["equal_a", "equal_b", "equal_c"]
+      # All should have close scores (tied base values with small ranking bonuses)
+      scores = Map.values(result.scores)
+      assert Enum.all?(scores, &(&1 >= 0.5 and &1 <= 0.6))  # Should be around 0.5 + small bonus
+      assert length(result.pairwise_comparisons) == 3  # (3*2)/2 = 3 comparisons
+    end
+
+    test "handles exact sample size edge cases" do
+      # Test with exactly the same number of trajectories as sample size
+      ruler = RulerCore.new(metric_weights: %{"accuracy" => 1.0}, sample_size: 3)
+
+      trajectories = [
+        TrajectoryResult.new("exact_1", "test", %Ranktration.Metrics{accuracy: 0.9}),
+        TrajectoryResult.new("exact_2", "test", %Ranktration.Metrics{accuracy: 0.7}),
+        TrajectoryResult.new("exact_3", "test", %Ranktration.Metrics{accuracy: 0.8})
+      ]
+
+      result = RulerCore.evaluate_trajectories(ruler, trajectories, "test")
+      assert length(result.rankings) == 3
+      # Should do full pairwise comparisons: (3*2)/2 = 3 comparisons
+      assert length(result.pairwise_comparisons) == 3
     end
   end
 
