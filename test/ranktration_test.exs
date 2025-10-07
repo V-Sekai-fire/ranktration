@@ -38,11 +38,13 @@ defmodule RanktrationTest do
 
     test "validates quality scores" do
       assert_raise ArgumentError, fn ->
-        TrajectoryResult.new("test", "content", %{"metric" => 1.5})  # > 1.0
+        # > 1.0
+        TrajectoryResult.new("test", "content", %{"metric" => 1.5})
       end
 
       assert_raise ArgumentError, fn ->
-        TrajectoryResult.new("test", "content", %{"metric" => -0.5})  # < 0.0
+        # < 0.0
+        TrajectoryResult.new("test", "content", %{"metric" => -0.5})
       end
     end
 
@@ -91,7 +93,8 @@ defmodule RanktrationTest do
 
       trajectories = [
         TrajectoryResult.new("a", "content_a", %{"accuracy" => 0.8}),
-        TrajectoryResult.new("b", "content_b", %{"accuracy" => 0.7})  # Different content
+        # Different content
+        TrajectoryResult.new("b", "content_b", %{"accuracy" => 0.7})
       ]
 
       assert_raise ArgumentError, fn ->
@@ -103,11 +106,14 @@ defmodule RanktrationTest do
   describe "evaluate_trajectories" do
     setup %{trajectories: trajectories} do
       # Simple evaluator prioritizing accuracy
-      ruler = RulerCore.new(metric_weights: %{
-        "accuracy" => 0.6,
-        "speed" => 0.3,
-        "robustness" => 0.1
-      })
+      ruler =
+        RulerCore.new(
+          metric_weights: %{
+            "accuracy" => 0.6,
+            "speed" => 0.3,
+            "robustness" => 0.1
+          }
+        )
 
       result = RulerCore.evaluate_trajectories(ruler, trajectories, "test_content")
 
@@ -182,13 +188,19 @@ defmodule RanktrationTest do
       %{trajectories: trajectories, weights: weights}
     end
 
-    test "evaluate_trajectories/3 convenience function", %{trajectories: trajectories, weights: weights} do
+    test "evaluate_trajectories/3 convenience function", %{
+      trajectories: trajectories,
+      weights: weights
+    } do
       result = Ranktration.evaluate_trajectories(trajectories, "test_content", weights)
       assert is_struct(result, RankingResult)
       assert length(result.rankings) == length(trajectories)
     end
 
-    test "compare_trajectories/3 convenience function", %{trajectories: [a, b | _], weights: weights} do
+    test "compare_trajectories/3 convenience function", %{
+      trajectories: [a, b | _],
+      weights: weights
+    } do
       comparison = Ranktration.compare_trajectories(a, b, weights)
       assert is_struct(comparison, Ranktration.TrajectoryComparison)
       assert comparison.trajectory_a == a.trajectory_id
@@ -202,45 +214,67 @@ defmodule RanktrationTest do
       # Simulate sorting algorithm performance based on our Python demo
       sorting_trajectories = [
         TrajectoryResult.new("timsort_python", "sorting_benchmark", %{
-          "execution_time" => 0.98,  # Very fast (normalized 0-1)
-          "space_efficiency" => 0.85, # Good memory usage
-          "correctness" => 1.0,      # Always correct
-          "stability" => 1.0         # Stable sorting
+          # Very fast (normalized 0-1)
+          "execution_time" => 0.98,
+          # Good memory usage
+          "space_efficiency" => 0.85,
+          # Always correct
+          "correctness" => 1.0,
+          # Stable sorting
+          "stability" => 1.0
         }),
         TrajectoryResult.new("heapsort_stdlib", "sorting_benchmark", %{
-          "execution_time" => 0.95,  # Fast but slightly slower
-          "space_efficiency" => 0.90, # Excellent memory
-          "correctness" => 1.0,      # Always correct
-          "stability" => 0.0         # Unstable sorting (penalty!)
+          # Fast but slightly slower
+          "execution_time" => 0.95,
+          # Excellent memory
+          "space_efficiency" => 0.90,
+          # Always correct
+          "correctness" => 1.0,
+          # Unstable sorting (penalty!)
+          "stability" => 0.0
         }),
         TrajectoryResult.new("insertionsort_bisect", "sorting_benchmark", %{
-          "execution_time" => 0.85,  # Slower but fine for small data
-          "space_efficiency" => 0.95, # Very memory efficient
-          "correctness" => 1.0,      # Always correct
-          "stability" => 1.0         # Stable sorting
+          # Slower but fine for small data
+          "execution_time" => 0.85,
+          # Very memory efficient
+          "space_efficiency" => 0.95,
+          # Always correct
+          "correctness" => 1.0,
+          # Stable sorting
+          "stability" => 1.0
         })
       ]
 
       # Weights prioritize speed and correctness, penalize instability
-      algorithm_ruler = RulerCore.new(metric_weights: %{
-        "execution_time" => 0.35,
-        "space_efficiency" => 0.25,
-        "correctness" => 0.25,
-        "stability" => 0.15
-      })
+      algorithm_ruler =
+        RulerCore.new(
+          metric_weights: %{
+            "execution_time" => 0.35,
+            "space_efficiency" => 0.25,
+            "correctness" => 0.25,
+            "stability" => 0.15
+          }
+        )
 
-      result = RulerCore.evaluate_trajectories(algorithm_ruler, sorting_trajectories, "sorting_benchmark")
+      result =
+        RulerCore.evaluate_trajectories(
+          algorithm_ruler,
+          sorting_trajectories,
+          "sorting_benchmark"
+        )
 
       # Timsort should generally win (fast, stable, correct)
       assert "timsort_python" in result.rankings
       assert is_float(result.scores["timsort_python"])
-      assert result.confidence > 0.0  # Should show meaningful differences
+      # Should show meaningful differences
+      assert result.confidence > 0.0
 
       # Heapsort should be penalized for instability but might still rank well
       heapsort_score = result.scores["heapsort_stdlib"]
       timsort_score = result.scores["timsort_python"]
       # In real scenarios, timsort usually outperforms due to stability bonus
-      assert abs(heapsort_score - timsort_score) < 1.0  # Reasonable gap
+      # Reasonable gap
+      assert abs(heapsort_score - timsort_score) < 1.0
     end
   end
 
@@ -252,8 +286,10 @@ defmodule RanktrationTest do
     end
 
     defp do_bubble_sort(list, 0), do: list
+
     defp do_bubble_sort(list, n) do
       {new_list, swapped} = bubble_pass(list, 0, false)
+
       if swapped do
         do_bubble_sort(new_list, n)
       else
@@ -262,6 +298,7 @@ defmodule RanktrationTest do
     end
 
     defp bubble_pass(list, index, swapped) when index >= length(list) - 1, do: {list, swapped}
+
     defp bubble_pass(list, index, swapped) do
       left = Enum.at(list, index)
       right = Enum.at(list, index + 1)
@@ -277,11 +314,13 @@ defmodule RanktrationTest do
     def insertion_sort(list), do: do_insertion_sort([], list)
 
     defp do_insertion_sort(sorted, []), do: sorted
+
     defp do_insertion_sort(sorted, [h | t]) do
       do_insertion_sort(insert(sorted, h), t)
     end
 
     defp insert([], elem), do: [elem]
+
     defp insert([h | t], elem) do
       case elem <= h do
         true -> [elem | [h | t]]
@@ -290,6 +329,7 @@ defmodule RanktrationTest do
     end
 
     def quicksort([]), do: []
+
     def quicksort([pivot | rest]) do
       {less, greater} = Enum.split_with(rest, &(&1 <= pivot))
       quicksort(less) ++ [pivot] ++ quicksort(greater)
@@ -297,6 +337,7 @@ defmodule RanktrationTest do
 
     def merge_sort([]), do: []
     def merge_sort([x]), do: [x]
+
     def merge_sort(list) do
       {left, right} = Enum.split(list, div(length(list), 2))
       merge(merge_sort(left), merge_sort(right))
@@ -304,6 +345,7 @@ defmodule RanktrationTest do
 
     defp merge([], right), do: right
     defp merge(left, []), do: left
+
     defp merge([l | left], [r | right]) do
       if l <= r do
         [l | merge(left, [r | right])]
@@ -320,17 +362,20 @@ defmodule RanktrationTest do
     end
 
     defp insert_heap(elem, []), do: [elem]
+
     defp insert_heap(elem, heap) do
-      heap ++ [elem] |> bubble_up(length(heap))
+      (heap ++ [elem]) |> bubble_up(length(heap))
     end
 
     defp bubble_up(heap, 0), do: heap
+
     defp bubble_up(heap, index) do
       parent_index = div(index - 1, 2)
       parent = Enum.at(heap, parent_index)
       child = Enum.at(heap, index)
 
-      if child < parent do  # For min-heap
+      # For min-heap
+      if child < parent do
         heap
         |> List.replace_at(parent_index, child)
         |> List.replace_at(index, parent)
@@ -341,6 +386,7 @@ defmodule RanktrationTest do
     end
 
     defp extract_all_min([], sorted), do: Enum.reverse(sorted)
+
     defp extract_all_min(heap, sorted) do
       min_val = Enum.at(heap, 0)
       new_heap = remove_min(heap)
@@ -349,7 +395,9 @@ defmodule RanktrationTest do
 
     defp remove_min(heap) do
       case length(heap) do
-        1 -> []
+        1 ->
+          []
+
         _ ->
           last = List.last(heap)
           heap_without_last = List.delete_at(heap, -1)
@@ -363,17 +411,19 @@ defmodule RanktrationTest do
       right_child = 2 * index + 2
       smallest = index
 
-      smallest = if left_child < length(heap) and Enum.at(heap, left_child) < Enum.at(heap, smallest) do
-        left_child
-      else
-        smallest
-      end
+      smallest =
+        if left_child < length(heap) and Enum.at(heap, left_child) < Enum.at(heap, smallest) do
+          left_child
+        else
+          smallest
+        end
 
-      smallest = if right_child < length(heap) and Enum.at(heap, right_child) < Enum.at(heap, smallest) do
-        right_child
-      else
-        smallest
-      end
+      smallest =
+        if right_child < length(heap) and Enum.at(heap, right_child) < Enum.at(heap, smallest) do
+          right_child
+        else
+          smallest
+        end
 
       if smallest != index do
         heap
@@ -396,7 +446,8 @@ defmodule RanktrationTest do
   describe "real sorting algorithm benchmarking" do
     test "benchmarks and ranks actual sorting algorithms using RULER" do
       # Generate test data with some characteristics to differentiate algorithms
-      test_data = Enum.take(Enum.shuffle(1..1000), 1000)  # Random dataset for balanced performance testing
+      # Random dataset for balanced performance testing
+      test_data = Enum.take(Enum.shuffle(1..1000), 1000)
 
       # Define algorithms to test
       algorithms = [
@@ -409,51 +460,63 @@ defmodule RanktrationTest do
       ]
 
       # Run benchmark for each algorithm
-      results = Enum.map(algorithms, fn {name, sort_fn} ->
-        # Warm up and measure
-        _warmup = sort_fn.(test_data)
+      results =
+        Enum.map(algorithms, fn {name, sort_fn} ->
+          # Warm up and measure
+          _warmup = sort_fn.(test_data)
 
-        # Run multiple times and average
-        times = for _ <- 1..3 do
-          {time, result} = :timer.tc(fn -> sort_fn.(test_data) end, :microsecond)
+          # Run multiple times and average
+          times =
+            for _ <- 1..3 do
+              {time, result} = :timer.tc(fn -> sort_fn.(test_data) end, :microsecond)
+
+              %{
+                # Convert to milliseconds
+                time: time / 1000.0,
+                result: result,
+                correct: result == Enum.sort(test_data),
+                stable: SortingBenchmarks.is_stable_sorted?(test_data, result)
+              }
+            end
+
+          avg_time = Enum.reduce(times, 0, &(&1.time + &2)) / length(times)
+          correct_pct = Enum.count(times, & &1.correct) / length(times)
+          stable_pct = Enum.count(times, & &1.stable) / length(times)
+
           %{
-            time: time / 1000.0,  # Convert to milliseconds
-            result: result,
-            correct: result == Enum.sort(test_data),
-            stable: SortingBenchmarks.is_stable_sorted?(test_data, result)
+            name: name,
+            avg_time: avg_time,
+            correctness: correct_pct,
+            stability: stable_pct
           }
-        end
-
-        avg_time = Enum.reduce(times, 0, &(&1.time + &2)) / length(times)
-        correct_pct = Enum.count(times, & &1.correct) / length(times)
-        stable_pct = Enum.count(times, & &1.stable) / length(times)
-
-        %{
-          name: name,
-          avg_time: avg_time,
-          correctness: correct_pct,
-          stability: stable_pct
-        }
-      end)
+        end)
 
       # Create trajectories for RULER evaluation
-      trajectories = Enum.map(results, fn result ->
-        TrajectoryResult.new(result.name, "sorting_benchmark_real", %{
-          "execution_time" => normalize_time_metric(results, result.avg_time),
-          "correctness" => result.correctness,
-          "stability" => result.stability
-        })
-      end)
+      trajectories =
+        Enum.map(results, fn result ->
+          TrajectoryResult.new(result.name, "sorting_benchmark_real", %{
+            "execution_time" => normalize_time_metric(results, result.avg_time),
+            "correctness" => result.correctness,
+            "stability" => result.stability
+          })
+        end)
 
       # Define metric weights prioritizing speed, correctness, and stability
-      ruler = RulerCore.new(metric_weights: %{
-        "execution_time" => 0.6,    # Speed most important
-        "correctness" => 0.3,       # Must be correct
-        "stability" => 0.1          # Stability bonus
-      })
+      ruler =
+        RulerCore.new(
+          metric_weights: %{
+            # Speed most important
+            "execution_time" => 0.6,
+            # Must be correct
+            "correctness" => 0.3,
+            # Stability bonus
+            "stability" => 0.1
+          }
+        )
 
       # Evaluate and rank
-      ranking_result = RulerCore.evaluate_trajectories(ruler, trajectories, "sorting_benchmark_real")
+      ranking_result =
+        RulerCore.evaluate_trajectories(ruler, trajectories, "sorting_benchmark_real")
 
       # Assert valid results
       assert length(ranking_result.rankings) == length(algorithms)
@@ -473,10 +536,12 @@ defmodule RanktrationTest do
       # Should show some performance differentiation
       all_scores = Map.values(ranking_result.scores)
       # Allow some ties but expect meaningful differences overall
-      assert length(Enum.uniq(all_scores)) > 1  # At least some variation
+      # At least some variation
+      assert length(Enum.uniq(all_scores)) > 1
 
       # Quick demonstration of ranking
       IO.puts("\nReal Sorting Algorithm Rankings:")
+
       Enum.each(ranking_result.rankings, fn alg ->
         score = ranking_result.scores[alg]
         IO.puts("#{alg}: #{Float.round(score, 3)}")
@@ -490,8 +555,10 @@ defmodule RanktrationTest do
       max_time = Enum.max(times)
 
       case max_time - min_time do
-        0.0 -> 1.0  # All times equal
-        diff -> 1.0 - ((time - min_time) / diff)  # Higher score for lower time
+        # All times equal
+        0.0 -> 1.0
+        # Higher score for lower time
+        diff -> 1.0 - (time - min_time) / diff
       end
     end
   end

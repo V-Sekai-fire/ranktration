@@ -64,12 +64,12 @@ defmodule Ranktration do
     """
 
     @type t :: %__MODULE__{
-      trajectory_id: String.t(),
-      content_id: String.t(),
-      quality_scores: %{String.t() => float()},
-      metadata: map(),
-      timestamp: DateTime.t()
-    }
+            trajectory_id: String.t(),
+            content_id: String.t(),
+            quality_scores: %{String.t() => float()},
+            metadata: map(),
+            timestamp: DateTime.t()
+          }
 
     defstruct [
       :trajectory_id,
@@ -95,9 +95,11 @@ defmodule Ranktration do
       Enum.each(scores, fn
         {key, value} when is_binary(key) and is_float(value) and value >= 0.0 and value <= 1.0 ->
           :ok
+
         {key, value} ->
-          raise ArgumentError, "Invalid score #{inspect value} for metric #{inspect key}"
+          raise ArgumentError, "Invalid score #{inspect(value)} for metric #{inspect(key)}"
       end)
+
       scores
     end
 
@@ -122,13 +124,13 @@ defmodule Ranktration do
     """
 
     @type t :: %__MODULE__{
-      trajectory_a: String.t(),
-      trajectory_b: String.t(),
-      preferred: String.t(),
-      confidence: float(),
-      margin: float(),
-      quality_differences: %{String.t() => float()}
-    }
+            trajectory_a: String.t(),
+            trajectory_b: String.t(),
+            preferred: String.t(),
+            confidence: float(),
+            margin: float(),
+            quality_differences: %{String.t() => float()}
+          }
 
     defstruct [
       :trajectory_a,
@@ -146,13 +148,13 @@ defmodule Ranktration do
     """
 
     @type t :: %__MODULE__{
-      rankings: [String.t()],
-      scores: %{String.t() => float()},
-      confidence: float(),
-      pairwise_comparisons: [TrajectoryComparison.t()],
-      consensus_metrics: map(),
-      analyzed_at: DateTime.t()
-    }
+            rankings: [String.t()],
+            scores: %{String.t() => float()},
+            confidence: float(),
+            pairwise_comparisons: [TrajectoryComparison.t()],
+            consensus_metrics: map(),
+            analyzed_at: DateTime.t()
+          }
 
     defstruct [
       :rankings,
@@ -193,9 +195,9 @@ defmodule Ranktration do
     """
 
     @type t :: %__MODULE__{
-      metric_weights: %{String.t() => float()},
-      config: map()
-    }
+            metric_weights: %{String.t() => float()},
+            config: map()
+          }
 
     defstruct [:metric_weights, :config]
 
@@ -225,7 +227,8 @@ defmodule Ranktration do
       # Validate all trajectories are for the same content
       Enum.each(trajectories, fn traj ->
         if traj.content_id != content_id do
-          raise ArgumentError, "All trajectories must be for the same content #{inspect content_id}"
+          raise ArgumentError,
+                "All trajectories must be for the same content #{inspect(content_id)}"
         end
       end)
 
@@ -262,27 +265,31 @@ defmodule Ranktration do
       end
     end
 
-    @spec compare_trajectory_pair(t(), TrajectoryResult.t(), TrajectoryResult.t()) :: TrajectoryComparison.t()
+    @spec compare_trajectory_pair(t(), TrajectoryResult.t(), TrajectoryResult.t()) ::
+            TrajectoryComparison.t()
     def compare_trajectory_pair(ruler, %TrajectoryResult{} = a, %TrajectoryResult{} = b) do
       # Calculate weighted scores for each trajectory
       score_a = calculate_weighted_score(ruler, a.quality_scores)
       score_b = calculate_weighted_score(ruler, b.quality_scores)
 
       # Calculate quality differences for analysis
-      quality_differences = calculate_quality_differences(ruler.metric_weights, a.quality_scores, b.quality_scores)
+      quality_differences =
+        calculate_quality_differences(ruler.metric_weights, a.quality_scores, b.quality_scores)
 
       # Determine preferred trajectory
-      {preferred, margin} = if abs(score_a - score_b) < 1.0e-6 do
-        # Tie-breaking logic when scores are equal
-        {compare_tie_breaker(ruler, a, b), 0.0}
-      else
-        preferred = if score_a > score_b, do: a.trajectory_id, else: b.trajectory_id
-        margin = abs(score_a - score_b)
-        {preferred, margin}
-      end
+      {preferred, margin} =
+        if abs(score_a - score_b) < 1.0e-6 do
+          # Tie-breaking logic when scores are equal
+          {compare_tie_breaker(ruler, a, b), 0.0}
+        else
+          preferred = if score_a > score_b, do: a.trajectory_id, else: b.trajectory_id
+          margin = abs(score_a - score_b)
+          {preferred, margin}
+        end
 
       # Calculate confidence based on margin and variance
-      confidence = min(1.0, margin * 2.0)  # Simplified confidence calculation
+      # Simplified confidence calculation
+      confidence = min(1.0, margin * 2.0)
 
       %TrajectoryComparison{
         trajectory_a: a.trajectory_id,
@@ -302,7 +309,9 @@ defmodule Ranktration do
       end)
     end
 
-    @spec calculate_quality_differences(%{String.t() => float()}, %{String.t() => float()}, %{String.t() => float()}) :: %{String.t() => float()}
+    @spec calculate_quality_differences(%{String.t() => float()}, %{String.t() => float()}, %{
+            String.t() => float()
+          }) :: %{String.t() => float()}
     defp calculate_quality_differences(weights, scores_a, scores_b) do
       Map.new(weights, fn {metric, _weight} ->
         a_score = Map.get(scores_a, metric, 0.0)
@@ -324,22 +333,25 @@ defmodule Ranktration do
     @spec calculate_consensus_ranking([TrajectoryComparison.t()]) :: [String.t()]
     defp calculate_consensus_ranking(comparisons) do
       # Count wins for each trajectory
-      win_counts = Enum.reduce(comparisons, %{}, fn comp, acc ->
-        winner = comp.preferred
-        Map.update(acc, winner, 1, &(&1 + 1))
-      end)
+      win_counts =
+        Enum.reduce(comparisons, %{}, fn comp, acc ->
+          winner = comp.preferred
+          Map.update(acc, winner, 1, &(&1 + 1))
+        end)
 
       # Debug: IO.puts("Win counts: #{inspect win_counts}")
 
       # Ensure all trajectories are included (even if they have 0 wins)
-      all_trajectory_ids = comparisons
-      |> Enum.flat_map(fn comp -> [comp.trajectory_a, comp.trajectory_b] end)
-      |> Enum.uniq()
+      all_trajectory_ids =
+        comparisons
+        |> Enum.flat_map(fn comp -> [comp.trajectory_a, comp.trajectory_b] end)
+        |> Enum.uniq()
 
       # Initialize 0 wins for trajectories not yet in win_counts
-      complete_win_counts = Enum.reduce(all_trajectory_ids, win_counts, fn id, acc ->
-        Map.put_new(acc, id, 0)
-      end)
+      complete_win_counts =
+        Enum.reduce(all_trajectory_ids, win_counts, fn id, acc ->
+          Map.put_new(acc, id, 0)
+        end)
 
       # Debug: IO.puts("Complete win counts: #{inspect complete_win_counts}")
 
@@ -349,18 +361,20 @@ defmodule Ranktration do
       |> Enum.map(fn {id, _wins} -> id end)
     end
 
-    @spec calculate_final_scores(t(), [TrajectoryResult.t()], [TrajectoryComparison.t()]) :: %{String.t() => float()}
+    @spec calculate_final_scores(t(), [TrajectoryResult.t()], [TrajectoryComparison.t()]) :: %{
+            String.t() => float()
+          }
     defp calculate_final_scores(ruler, trajectories, comparisons) do
       trajectory_ids = Enum.map(trajectories, & &1.trajectory_id)
       rankings = calculate_consensus_ranking(comparisons)
 
       Enum.reduce(trajectory_ids, %{}, fn traj_id, acc ->
         # Base score from weighted metrics
-        traj = Enum.find(trajectories, & &1.trajectory_id == traj_id)
+        traj = Enum.find(trajectories, &(&1.trajectory_id == traj_id))
         base_score = calculate_weighted_score(ruler, traj.quality_scores)
 
         # Ranking bonus (higher ranking gets small bonus)
-        rank_position = Enum.find_index(rankings, & &1 == traj_id) || length(rankings)
+        rank_position = Enum.find_index(rankings, &(&1 == traj_id)) || length(rankings)
         ranking_bonus = (length(rankings) - rank_position) / length(rankings) * 0.05
 
         Map.put(acc, traj_id, min(1.0, base_score + ranking_bonus))
@@ -370,12 +384,17 @@ defmodule Ranktration do
     @spec analyze_consensus([TrajectoryComparison.t()]) :: map()
     defp analyze_consensus(comparisons) do
       # Calculate win distribution and other consensus metrics
-      wins_distribution = Enum.reduce(comparisons, %{}, fn comp, acc ->
-        Map.update(acc, comp.preferred, 1, &(&1 + 1))
-      end)
+      wins_distribution =
+        Enum.reduce(comparisons, %{}, fn comp, acc ->
+          Map.update(acc, comp.preferred, 1, &(&1 + 1))
+        end)
 
       confidence_stats = Enum.map(comparisons, & &1.confidence)
-      avg_confidence = if confidence_stats == [], do: 0.0, else: Enum.sum(confidence_stats) / length(confidence_stats)
+
+      avg_confidence =
+        if confidence_stats == [],
+          do: 0.0,
+          else: Enum.sum(confidence_stats) / length(confidence_stats)
 
       %{
         "wins_distribution" => wins_distribution,
@@ -401,6 +420,7 @@ defmodule Ranktration do
       end
 
       total_weight = Enum.sum(Map.values(weights))
+
       if abs(total_weight - 1.0) > 1.0e-3 do
         raise ArgumentError, "metric weights must sum to 1.0, got #{total_weight}"
       end
@@ -408,20 +428,23 @@ defmodule Ranktration do
       Enum.each(weights, fn
         {key, value} when is_binary(key) and is_float(value) and value >= 0.0 ->
           :ok
+
         {key, value} ->
-          raise ArgumentError, "Invalid weight #{inspect value} for metric #{inspect key}"
+          raise ArgumentError, "Invalid weight #{inspect(value)} for metric #{inspect(key)}"
       end)
     end
   end
 
   # Convenience functions for easy access
-  @spec evaluate_trajectories([TrajectoryResult.t()], String.t(), %{String.t() => float()}) :: RankingResult.t()
+  @spec evaluate_trajectories([TrajectoryResult.t()], String.t(), %{String.t() => float()}) ::
+          RankingResult.t()
   def evaluate_trajectories(trajectories, content_id, weights) do
     ruler = RulerCore.new(metric_weights: weights)
     RulerCore.evaluate_trajectories(ruler, trajectories, content_id)
   end
 
-  @spec compare_trajectories(TrajectoryResult.t(), TrajectoryResult.t(), %{String.t() => float()}) :: TrajectoryComparison.t()
+  @spec compare_trajectories(TrajectoryResult.t(), TrajectoryResult.t(), %{String.t() => float()}) ::
+          TrajectoryComparison.t()
   def compare_trajectories(a, b, weights) do
     ruler = RulerCore.new(metric_weights: weights)
     RulerCore.compare_trajectory_pair(ruler, a, b)

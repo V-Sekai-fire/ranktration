@@ -186,6 +186,26 @@ Deterministic results with mathematical foundation in tournament theory.
 
 ## Development & Testing
 
+### Pre-commit Hooks
+
+This project uses [pre-commit](https://pre-commit.com/) to ensure consistent code formatting and quality.
+
+#### Installation
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install the git hooks
+pre-commit install
+```
+
+#### Usage
+
+Pre-commit will automatically:
+- Format Elixir code with `mix format` on each commit
+- Check compilation with `mix compile --warnings-as-errors`
+
 ### Running Tests
 
 ```bash
