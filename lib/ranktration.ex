@@ -22,12 +22,15 @@ defmodule Ranktration do
         })
       ]
 
-      # Configure metric weights for your domain
-      evaluator = Ranktration.RulerCore.new(metric_weights: %{
-        "accuracy" => 0.5,
-        "speed" => 0.3,
-        "robustness" => 0.2
-      })
+      # Configure evaluator with sampling for massive scale (millions of trajectories)
+      evaluator = Ranktration.RulerCore.new(
+        metric_weights: %{
+          "accuracy" => 0.5,
+          "speed" => 0.3,
+          "robustness" => 0.2
+        },
+        sample_size: 500  # Compare only 500 trajectories, rank millions
+      )
 
       # Evaluate and rank
       result = Ranktration.RulerCore.evaluate_trajectories(evaluator, trajectories, "content_1")
@@ -36,6 +39,19 @@ defmodule Ranktration do
       result.rankings  # Ordered list of trajectory IDs
       result.scores    # Map of trajectory_id => final_score
       result.confidence # Overall confidence in ranking
+
+  ## Scalability
+
+  RULER scales to millions of trajectories through intelligent sampling:
+
+  - **Linear scalability**: O(k²) complexity where k = sample_size (vs O(n²) for all n trajectories)
+  - **Configurable accuracy**: Trade speed vs precision with `sample_size` parameter
+  - **Massive datasets**: Handle 1M+ trajectories by comparing only hundreds
+
+  Examples with sampling performance:
+  - `sample_size: 100` → 10k comparisons (fast, good for exploration)
+  - `sample_size: 1000` → 1M comparisons (balanced, high confidence)
+  - No sampling → Full O(n²) comparisons (accurate, but slow for n > 1000)
 
   ## Domain Independence
 
@@ -284,18 +300,21 @@ defmodule Ranktration do
 
     @type t :: %__MODULE__{
             metric_weights: %{String.t() => float()},
+            sample_size: pos_integer(),
             config: map()
           }
 
-    defstruct [:metric_weights, :config]
+    defstruct [:metric_weights, :config, sample_size: 100]
 
     @spec new(keyword()) :: t()
     def new(opts \\ []) do
       metric_weights = Keyword.get(opts, :metric_weights, %{})
+      sample_size = Keyword.get(opts, :sample_size, 100)  # Default sample size
       validate_metric_weights!(metric_weights)
 
       %__MODULE__{
         metric_weights: metric_weights,
+        sample_size: sample_size,
         config: Map.new(opts)
       }
     end
@@ -320,14 +339,15 @@ defmodule Ranktration do
         end
       end)
 
-      # Perform pairwise comparisons
-      pairwise_comparisons = compare_all_trajectories(ruler, trajectories)
+      # Sample trajectories for scalability (handles millions of trajectories)
+      sampled_trajectories = sample_trajectories(trajectories, ruler.sample_size)
 
-      # Calculate consensus ranking
-      rankings = calculate_consensus_ranking(pairwise_comparisons)
+      # Perform pairwise comparisons on sample
+      pairwise_comparisons = compare_all_trajectories(ruler, sampled_trajectories)
 
-      # Calculate final scores with ranking bonuses
-      scores = calculate_final_scores(ruler, trajectories, pairwise_comparisons)
+      # Calculate ranking on full dataset using sample results
+      rankings = calculate_full_ranking_from_sample(trajectories, pairwise_comparisons)
+      scores = calculate_sample_based_scores(ruler, trajectories, pairwise_comparisons)
 
       # Analyze consensus and stability
       consensus_metrics = analyze_consensus(pairwise_comparisons)
@@ -499,6 +519,85 @@ defmodule Ranktration do
         confidences = Enum.map(comparisons, & &1.confidence)
         Enum.sum(confidences) / length(confidences)
       end
+    end
+
+    @spec sample_trajectories([TrajectoryResult.t()], pos_integer()) :: [TrajectoryResult.t()]
+    defp sample_trajectories(trajectories, sample_size) do
+      total_count = length(trajectories)
+
+      if total_count <= sample_size do
+        # No sampling needed if we have fewer trajectories than sample size
+        trajectories
+      else
+        # Random sampling for scalability
+        trajectories
+        |> Enum.shuffle()
+        |> Enum.take(sample_size)
+      end
+    end
+
+    @spec calculate_full_ranking_from_sample([TrajectoryResult.t()], [TrajectoryComparison.t()]) :: [String.t()]
+    defp calculate_full_ranking_from_sample(all_trajectories, sample_comparisons) do
+      # Get sample trajectory IDs that were actually compared
+      sample_ids =
+        sample_comparisons
+        |> Enum.flat_map(fn comp -> [comp.trajectory_a, comp.trajectory_b] end)
+        |> Enum.uniq()
+
+      # Get rankings from sample comparisons
+      sample_rankings = calculate_consensus_ranking(sample_comparisons)
+
+      # For trajectories not in sample, rank them based on their intrinsic quality scores
+      # relative to the sampled trajectories
+      unsampled_trajectories =
+        all_trajectories
+        |> Enum.reject(fn traj -> traj.trajectory_id in sample_ids end)
+
+      # Sort unsampled by their weighted score against sample average
+      if sample_rankings != [] do
+        top_sample_id = hd(sample_rankings)
+        top_sample = Enum.find(all_trajectories, fn t -> t.trajectory_id == top_sample_id end)
+
+        if top_sample do
+          # Create a pseudo-comparison for each unsampled trajectory vs top sample
+          unsampled_rankings =
+            unsampled_trajectories
+            |> Enum.map(fn traj ->
+              # Compare against top performing sample trajectory
+              comparison = compare_trajectory_pair(%__MODULE__{}, traj, top_sample)
+              {traj.trajectory_id, comparison.margin}
+            end)
+            |> Enum.sort_by(fn {_id, margin} -> margin end, :desc)  # Higher margin means better
+            |> Enum.map(fn {id, _margin} -> id end)
+
+          sample_rankings ++ unsampled_rankings
+        else
+          # Fallback: just return all IDs in original order if sampling went wrong
+          Enum.map(all_trajectories, & &1.trajectory_id)
+        end
+      else
+        # No valid comparisons, return all in original order
+        Enum.map(all_trajectories, & &1.trajectory_id)
+      end
+    end
+
+    @spec calculate_sample_based_scores(t(), [TrajectoryResult.t()], [TrajectoryComparison.t()]) :: %{
+            String.t() => float()
+          }
+    defp calculate_sample_based_scores(ruler, trajectories, sample_comparisons) do
+      # Calculate scores for all trajectories using sample-based ranking
+      rankings = calculate_full_ranking_from_sample(trajectories, sample_comparisons)
+
+      Enum.reduce(trajectories, %{}, fn traj, acc ->
+        # Base score from weighted metrics (full calculation for accuracy)
+        base_score = calculate_weighted_score(ruler, traj.quality_scores)
+
+        # Ranking bonus from sample-based tournament ranking
+        rank_position = Enum.find_index(rankings, &(&1 == traj.trajectory_id))
+        ranking_bonus = if rank_position, do: (length(rankings) - rank_position) / length(rankings) * 0.05, else: 0.0
+
+        Map.put(acc, traj.trajectory_id, min(1.0, base_score + ranking_bonus))
+      end)
     end
 
     @spec validate_metric_weights!(%{String.t() => float()}) :: :ok

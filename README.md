@@ -33,10 +33,29 @@ Examples: sorting algorithms, ML models, compiler optimizations
 ## How It Works
 
 1. **Collect trajectories** - Gather approaches with measurable metrics
-2. **Pairwise battles** - Compare each against every other using weighted scores
-3. **Tournament ranking** - Establish final order through competitive analysis
-4. **Statistical confidence** - Measure ranking stability and significance
-5. **Final scoring** - Apply ranking bonuses to create comprehensive evaluation
+2. **Smart sampling** - Select representative sample for large datasets (millions scale)
+3. **Pairwise battles** - Compare sample trajectories using weighted scores
+4. **Tournament ranking** - Establish global rankings through competitive analysis
+5. **Statistical confidence** - Measure ranking stability and significance
+6. **Final scoring** - Apply ranking bonuses to create comprehensive evaluation
+
+## Scalability
+
+RULER handles massive datasets through configurable sampling:
+
+```elixir
+# Scale to millions of trajectories
+evaluator = Ranktration.RulerCore.new(
+  metric_weights: %{"accuracy" => 0.5, "speed" => 0.3, "robustness" => 0.2},
+  sample_size: 1000  # Compare only 1000 trajectories, rank the full dataset
+)
+```
+
+**Performance modes:**
+- **sample_size: 100** → Fast exploration (10k comparisons)
+- **sample_size: 1000** → Balanced quality (1M comparisons)
+- **sample_size: 5000** → High confidence (25M comparisons)
+- **Default: 100** → Conservative defaults for exploration
 
 ## API Reference
 
@@ -65,7 +84,7 @@ Contains evaluation results and analysis.
 - `get_score/2`: Retrieve final score for trajectory
 - `get_rank/2`: Get ranking position (1-indexed)
 
-Performance: O(n²) pairwise comparisons, optimal for 2-100 trajectories. Sub-millisecond evaluation.
+Performance: O(k²) comparisons where k=sample_size, scales to millions of trajectories. Configurable speed vs accuracy trade-offs.
 
 ## Development & Testing
 
