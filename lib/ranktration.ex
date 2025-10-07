@@ -3,8 +3,8 @@ defmodule Ranktration do
   RULER - Robust Unified Learning Evaluation & Ranking
 
   A generalized trajectory evaluation and ranking framework that can work
-  across any domain with quantifiable metrics. Originally developed for
-  content ranking in computer science algorithms.
+  across any domain with quantifiable metrics. Originally developed by OpenPipe
+  for AI evaluation and trajectory analysis in machine learning.
 
   ## Usage
 

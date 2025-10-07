@@ -20,7 +20,10 @@ defmodule Ranktration.MixProject do
   end
 
   defp deps do
-    []
+    [
+      {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
+      {:excoveralls, "~> 0.18", only: [:test]}
+    ]
   end
 
   def package do
