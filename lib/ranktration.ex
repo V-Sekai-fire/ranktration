@@ -8,17 +8,17 @@ defmodule Ranktration do
 
   ## Usage
 
-      # Create trajectories with domain-specific metrics
+      # Create trajectories with type-safe metrics
       trajectories = [
-        Ranktration.TrajectoryResult.new("method_a", "content_1", %{
-          "accuracy" => 0.9,
-          "speed" => 0.8,
-          "robustness" => 0.6
+        Ranktration.TrajectoryResult.new("method_a", "content_1", %Ranktration.Metrics{
+          accuracy: 0.9,
+          speed: 0.8,
+          robustness: 0.6
         }),
-        Ranktration.TrajectoryResult.new("method_b", "content_1", %{
-          "accuracy" => 0.7,
-          "speed" => 0.9,
-          "robustness" => 0.8
+        Ranktration.TrajectoryResult.new("method_b", "content_1", %Ranktration.Metrics{
+          accuracy: 0.7,
+          speed: 0.9,
+          robustness: 0.8
         })
       ]
 
@@ -72,6 +72,7 @@ defmodule Ranktration do
       accuracy: float() | nil,
       correctness: float() | nil,
       stability: float() | nil,
+      robustness: float() | nil,
       execution_time: float() | nil,
       space_efficiency: float() | nil,
       custom: %{atom() => float()} | nil
@@ -82,6 +83,7 @@ defmodule Ranktration do
       :accuracy,
       :correctness,
       :stability,
+      :robustness,
       :execution_time,
       :space_efficiency,
       custom: %{}
@@ -95,7 +97,7 @@ defmodule Ranktration do
     @spec validate(t()) :: :ok | {:error, String.t()}
     def validate(%__MODULE__{} = metrics) do
       # Check all numeric fields are valid 0.0-1.0 floats
-      fields_to_check = [:speed, :accuracy, :correctness, :stability, :execution_time, :space_efficiency]
+      fields_to_check = [:speed, :accuracy, :correctness, :stability, :robustness, :execution_time, :space_efficiency]
 
       Enum.each(fields_to_check, fn field ->
         value = Map.get(metrics, field)
@@ -127,7 +129,7 @@ defmodule Ranktration do
 
     @spec to_map(t()) :: %{String.t() => float()}
     def to_map(%__MODULE__{} = metrics) do
-      # Convert struct to string-keyed map for backward compatibility
+      # Convert struct to string-keyed map for internal use
       metrics
       |> Map.from_struct()
       |> Map.delete(:__struct__)
@@ -174,39 +176,20 @@ defmodule Ranktration do
       :timestamp
     ]
 
-    @spec new(String.t(), String.t(), %{String.t() => float()} | Metrics.t(), map()) :: t()
-    def new(trajectory_id, content_id, quality_scores, metadata \\ %{}) do
-      quality_scores_map = case quality_scores do
-        %Metrics{} = struct ->
-          Metrics.validate(struct)  # Validate the struct
-          Metrics.to_map(struct)   # Convert to string-based map for internal use
-        %{} = map ->
-          validate_scores(map)
-        _ ->
-          raise ArgumentError, "quality_scores must be a Metrics struct or a string-keyed map"
-      end
+    @spec new(String.t(), String.t(), Metrics.t(), map()) :: t()
+    def new(trajectory_id, content_id, %Metrics{} = metrics, metadata \\ %{}) do
+      Metrics.validate(metrics)  # Validate the struct
 
       %__MODULE__{
         trajectory_id: trajectory_id,
         content_id: content_id,
-        quality_scores: quality_scores_map,
+        quality_scores: Metrics.to_map(metrics),  # Convert to string-based map for internal use
         metadata: metadata,
         timestamp: DateTime.utc_now()
       }
     end
 
-    @spec validate_scores(%{String.t() => float()}) :: %{String.t() => float()}
-    defp validate_scores(scores) do
-      Enum.each(scores, fn
-        {key, value} when is_binary(key) and is_float(value) and value >= 0.0 and value <= 1.0 ->
-          :ok
 
-        {key, value} ->
-          raise ArgumentError, "Invalid score #{inspect(value)} for metric #{inspect(key)}"
-      end)
-
-      scores
-    end
 
     @spec has_metric?(t(), String.t()) :: boolean()
     def has_metric?(%__MODULE__{quality_scores: scores}, metric),

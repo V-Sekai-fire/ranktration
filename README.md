@@ -20,12 +20,6 @@ trajectories = [
 
 evaluator = Ranktration.RulerCore.new(metric_weights: %{"speed" => 0.6, "accuracy" => 0.4})
 result = Ranktration.RulerCore.evaluate_trajectories(evaluator, trajectories, "bench")
-
-# Or using string-based maps (backward compatible)
-trajectories = [
-  Ranktration.TrajectoryResult.new("method_a", "bench", %{"speed" => 0.9, "accuracy" => 0.8}),
-  Ranktration.TrajectoryResult.new("method_b", "bench", %{"speed" => 0.7, "accuracy" => 0.95})
-]
 ```
 
 ## API
