@@ -8,7 +8,8 @@ defmodule Ranktration.MixProject do
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description: "Rank/compare algorithms, models, or approaches with weighted multi-criteria analysis",
+      description:
+        "Rank/compare algorithms, models, or approaches with weighted multi-criteria analysis",
       package: package()
     ]
   end
