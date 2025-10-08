@@ -1,10 +1,10 @@
 defmodule Ranktration do
   @moduledoc """
-  RULER - Robust Unified Learning Evaluation & Ranking
+  Ranktration: Tournament-Style Multi-Criteria Ranking
 
-  A generalized trajectory evaluation and ranking framework that can work
-  across any domain with quantifiable metrics. Originally developed by OpenPipe
-  for AI evaluation and trajectory analysis in machine learning.
+  A generalized ranking framework for comparing algorithms, models, or approaches
+  across multiple criteria using weighted tournament-style analysis. Features
+  evaluated ranking methodology inspired by advanced evaluation frameworks.
 
   ## Usage
 
@@ -42,7 +42,7 @@ defmodule Ranktration do
 
   ## Scalability
 
-  RULER scales to millions of trajectories through intelligent sampling:
+  Ranktration scales to millions of trajectories through intelligent sampling:
 
   - **Linear scalability**: O(k²) complexity where k = sample_size (vs O(n²) for all n trajectories)
   - **Configurable accuracy**: Trade speed vs precision with `sample_size` parameter
@@ -55,7 +55,7 @@ defmodule Ranktration do
 
   ## Domain Independence
 
-  RULER works with any domain that has:
+  Ranktration works with any domain that has:
   - Multiple trajectories (attempts/solutions)
   - Quantifiable quality metrics
   - Same content being evaluated
@@ -353,7 +353,7 @@ defmodule Ranktration do
 
   defmodule RulerCore do
     @moduledoc """
-    The main RULER evaluation engine that can be configured for different domains.
+    The main Ranktration evaluation engine that can be configured for different domains.
 
     Configure it once with your domain's metric weights, then use it to evaluate
     any number of trajectories in that domain.
@@ -369,7 +369,7 @@ defmodule Ranktration do
 
     @spec new(keyword()) :: t()
     @doc """
-    Creates a new RULER evaluator with configurable metric weights and sampling.
+    Creates a new Ranktration evaluator with configurable metric weights and sampling.
 
     ## Examples
 
@@ -488,7 +488,7 @@ defmodule Ranktration do
       }
     end
 
-    # Private implementation details extracted from our Python RULER
+    # Core algorithm implementation using tournament-style ranking
     @spec compare_all_trajectories(t(), [TrajectoryResult.t()]) :: [TrajectoryComparison.t()]
     defp compare_all_trajectories(ruler, trajectories) do
       for a <- trajectories, b <- trajectories, a.trajectory_id < b.trajectory_id do
