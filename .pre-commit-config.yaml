@@ -15,4 +15,4 @@ repos:
         entry: mix compile --warnings-as-errors
         language: system
         files: \.(ex|exs)$
-        pass_filenames: false</content>
+        pass_filenames: false
