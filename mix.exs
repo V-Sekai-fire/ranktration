@@ -8,7 +8,7 @@ defmodule Ranktration.MixProject do
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description: "RULER: Robust Unified Learning Evaluation & Ranking",
+      description: "Rank/compare algorithms, models, or approaches with weighted multi-criteria analysis",
       package: package()
     ]
   end
@@ -21,6 +21,7 @@ defmodule Ranktration.MixProject do
 
   defp deps do
     [
+      {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       {:excoveralls, "~> 0.18", only: [:test]}
     ]
