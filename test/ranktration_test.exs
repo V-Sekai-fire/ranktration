@@ -730,7 +730,9 @@ defmodule RanktrationTest do
             _warmup = sort_fn.(test_data)
 
             # Single run for speed (vs 3 runs)
-            {time, result} = :timer.tc(fn -> sort_fn.(test_data) end, :microseconds)
+            start_time = System.monotonic_time(:microsecond)
+            result = sort_fn.(test_data)
+            time = System.monotonic_time(:microsecond) - start_time
 
             %{
               name: name,
