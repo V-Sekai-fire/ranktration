@@ -2,33 +2,30 @@
 
 Rank/compare algorithms, models, or approaches with weighted multi-criteria analysis.
 
+## Installation
+
+Add to your `mix.exs`:
+
 ```elixir
 def deps do
   [{:ranktration, "~> 0.1.0"}]
 end
 ```
 
-```elixir
-# Type-safe approach using Metrics struct
-metrics_a = Ranktration.Metrics.new(speed: 0.9, accuracy: 0.8)
-metrics_b = Ranktration.Metrics.new(speed: 0.7, accuracy: 0.95)
+Then run `mix deps.get`.
 
-trajectories = [
-  Ranktration.TrajectoryResult.new("method_a", "bench", metrics_a),
-  Ranktration.TrajectoryResult.new("method_b", "bench", metrics_b)
-]
+## Documentation
 
-evaluator = Ranktration.RulerCore.new(metric_weights: %{"speed" => 0.6, "accuracy" => 0.4})
-result = Ranktration.RulerCore.evaluate_trajectories(evaluator, trajectories, "bench")
-```
+Complete API documentation with interactive examples is available via `mix docs`.
 
-## API
+## Core Concepts
 
-- `Ranktration.TrajectoryResult.new(name, content, scores)` - Create trajectory
-- `Ranktration.RulerCore.new(weights: %{"metric" => weight})` - Create evaluator
-- `Ranktration.RulerCore.evaluate_trajectories(evaluator, trajectories, content)` - Get rankings
+Ranktration evaluates multiple approaches (trajectories) across multiple criteria using:
 
-Examples: sorting algorithms, ML models, compiler optimizations
+1. **Weighted scoring** - Combine multiple quality metrics
+2. **Pairwise comparisons** - Tournament-style ranking
+3. **Statistical confidence** - Measure ranking reliability
+4. **Scalable sampling** - Handle millions of trajectories efficiently
 
 ## How It Works
 
@@ -41,21 +38,16 @@ Examples: sorting algorithms, ML models, compiler optimizations
 
 ## Scalability
 
-RULER handles massive datasets through configurable sampling:
+RULER scales to millions of trajectories using intelligent sampling:
 
-```elixir
-# Scale to millions of trajectories
-evaluator = Ranktration.RulerCore.new(
-  metric_weights: %{"accuracy" => 0.5, "speed" => 0.3, "robustness" => 0.2},
-  sample_size: 1000  # Compare only 1000 trajectories, rank the full dataset
-)
-```
+- **Linear scalability**: O(k²) complexity where k = sample_size (vs O(n²) for all n trajectories)
+- **Configurable accuracy**: Trade speed vs precision with `sample_size` parameter
+- **Massive datasets**: Handle 1M+ trajectories by comparing only hundreds
 
 **Performance modes:**
-- **sample_size: 100** → Fast exploration (10k comparisons)
-- **sample_size: 1000** → Balanced quality (1M comparisons)
-- **sample_size: 5000** → High confidence (25M comparisons)
-- **Default: 100** → Conservative defaults for exploration
+- `sample_size: 100` → Fast exploration (10k comparisons)
+- `sample_size: 1000` → Balanced quality (1M comparisons)
+- `sample_size: 5000` → High confidence (25M comparisons)
 
 ## API Reference
 

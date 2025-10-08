@@ -106,6 +106,35 @@ defmodule Ranktration do
     ]
 
     @spec new(keyword() | map()) :: t()
+    @doc """
+    Creates new metrics with type-safe validation.
+
+    ## Examples
+
+        iex> Ranktration.Metrics.new(speed: 0.9, accuracy: 0.8)
+        %Ranktration.Metrics{
+          speed: 0.9,
+          accuracy: 0.8,
+          correctness: nil,
+          stability: nil,
+          robustness: nil,
+          execution_time: nil,
+          space_efficiency: nil,
+          custom: %{}
+        }
+
+        iex> Ranktration.Metrics.new(%{custom: %{response_time: 0.7}})
+        %Ranktration.Metrics{
+          speed: nil,
+          accuracy: nil,
+          correctness: nil,
+          stability: nil,
+          robustness: nil,
+          execution_time: nil,
+          space_efficiency: nil,
+          custom: %{response_time: 0.7}
+        }
+    """
     def new(attrs \\ []) do
       struct!(__MODULE__, attrs)
     end
@@ -204,6 +233,27 @@ defmodule Ranktration do
     ]
 
     @spec new(String.t(), String.t(), Metrics.t(), map()) :: t()
+    @doc """
+    Creates a new trajectory result with automated metric validation and timestamping.
+
+    ## Examples
+
+        iex> metrics = Ranktration.Metrics.new(speed: 0.9, accuracy: 0.8)
+        iex> trajectory = Ranktration.TrajectoryResult.new("method_a", "content_1", metrics)
+        iex> trajectory.trajectory_id
+        "method_a"
+        iex> trajectory.content_id
+        "content_1"
+        iex> trajectory.quality_scores
+        %{"speed" => 0.9, "accuracy" => 0.8}
+
+        iex> custom_metrics = Ranktration.Metrics.new(%{custom: %{latency: 0.7}})
+        iex> trajectory = Ranktration.TrajectoryResult.new("method_b", "test", custom_metrics, %{algorithm: "genetic"})
+        iex> trajectory.quality_scores
+        %{"latency" => 0.7}
+        iex> trajectory.metadata.algorithm
+        "genetic"
+    """
     def new(trajectory_id, content_id, %Metrics{} = metrics, metadata \\ %{}) do
       # Validate the struct
       Metrics.validate(metrics)
@@ -318,6 +368,24 @@ defmodule Ranktration do
     defstruct [:metric_weights, :config, sample_size: 100]
 
     @spec new(keyword()) :: t()
+    @doc """
+    Creates a new RULER evaluator with configurable metric weights and sampling.
+
+    ## Examples
+
+        iex> ruler = Ranktration.RulerCore.new(metric_weights: %{"accuracy" => 0.6, "speed" => 0.4})
+        iex> ruler.metric_weights
+        %{"accuracy" => 0.6, "speed" => 0.4}
+        iex> ruler.sample_size
+        100
+
+        iex> ruler = Ranktration.RulerCore.new(
+        ...>   metric_weights: %{"accuracy" => 0.5, "speed" => 0.3, "robustness" => 0.2},
+        ...>   sample_size: 50
+        ...> )
+        iex> ruler.sample_size
+        50
+    """
     def new(opts \\ []) do
       metric_weights = Keyword.get(opts, :metric_weights, %{})
       # Default sample size
@@ -338,6 +406,49 @@ defmodule Ranktration do
     end
 
     @spec evaluate_trajectories(t(), [TrajectoryResult.t()], String.t()) :: RankingResult.t()
+    @doc """
+    Evaluates and ranks trajectories using weighted multi-criteria analysis.
+
+    Performs pairwise comparisons, handles sampling for scalability, and returns
+    complete ranking results with confidence metrics.
+
+    ## Examples
+
+        iex> # Create trajectories
+        iex> metrics_a = Ranktration.Metrics.new(accuracy: 0.9, speed: 0.8)
+        iex> metrics_b = Ranktration.Metrics.new(accuracy: 0.7, speed: 0.9)
+        iex> trajectories = [
+        ...>   Ranktration.TrajectoryResult.new("method_a", "content_1", metrics_a),
+        ...>   Ranktration.TrajectoryResult.new("method_b", "content_1", metrics_b)
+        ...> ]
+        iex> # Create evaluator
+        iex> ruler = Ranktration.RulerCore.new(metric_weights: %{"accuracy" => 0.6, "speed" => 0.4})
+        iex> # Evaluate rankings
+        iex> result = Ranktration.RulerCore.evaluate_trajectories(ruler, trajectories, "content_1")
+        iex> result.rankings
+        ["method_a", "method_b"]
+        iex> Map.keys(result.scores)
+        ["method_a", "method_b"]
+        iex> is_float(result.confidence)
+        true
+        iex> length(result.pairwise_comparisons)
+        1
+
+    ## Scalability
+
+        iex> # Handle large datasets with sampling
+        iex> large_trajectories = for i <- 1..5 do
+        ...>   metrics = Ranktration.Metrics.new(accuracy: 0.1 * i)
+        ...>   Ranktration.TrajectoryResult.new("method_\#{i}", "large_test", metrics)
+        ...> end
+        iex> evaluator = Ranktration.RulerCore.new(
+        ...>   metric_weights: %{"accuracy" => 1.0},
+        ...>   sample_size: 3  # Only sample 3 for comparison
+        ...> )
+        iex> result = Ranktration.RulerCore.evaluate_trajectories(evaluator, large_trajectories, "large_test")
+        iex> length(result.rankings)
+        5
+    """
     def evaluate_trajectories(%__MODULE__{} = ruler, trajectories, content_id) do
       if length(trajectories) < 2 do
         raise ArgumentError, "Need at least 2 trajectories to rank, got #{length(trajectories)}"
@@ -633,8 +744,8 @@ defmodule Ranktration do
 
   @spec compare_trajectories(TrajectoryResult.t(), TrajectoryResult.t(), %{String.t() => float()}) ::
           TrajectoryComparison.t()
-  def compare_trajectories(a, b, weights) do
+  def compare_trajectories(trajectory_a, trajectory_b, weights) do
     ruler = RulerCore.new(metric_weights: weights)
-    RulerCore.compare_trajectory_pair(ruler, a, b)
+    RulerCore.compare_trajectory_pair(ruler, trajectory_a, trajectory_b)
   end
 end
