@@ -22,14 +22,14 @@ defmodule Ranktration do
         })
       ]
 
-      # Configure evaluator with sampling for massive scale (millions of trajectories)
+      # Configure evaluator with sampling for efficient scalability
       evaluator = Ranktration.RulerCore.new(
         metric_weights: %{
           "accuracy" => 0.5,
           "speed" => 0.3,
           "robustness" => 0.2
         },
-        sample_size: 500  # Compare only 500 trajectories, rank millions
+        sample_size: 500  # Efficiently evaluates large datasets
       )
 
       # Evaluate and rank
@@ -42,11 +42,11 @@ defmodule Ranktration do
 
   ## Scalability
 
-  Ranktration scales to millions of trajectories through intelligent sampling:
+  Ranktration efficiently handles large datasets through intelligent sampling:
 
-  - **Linear scalability**: O(k²) complexity where k = sample_size (vs O(n²) for all n trajectories)
-  - **Configurable accuracy**: Trade speed vs precision with `sample_size` parameter
-  - **Massive datasets**: Handle 1M+ trajectories by comparing only hundreds
+  - **Quadratic complexity in sample size**: O(k²) where k = sample_size (much better than O(n²) for all n trajectories)
+  - **Configurable trade-off**: Adjust `sample_size` to balance speed vs accuracy
+  - **Scalable design**: Handles datasets with thousands of trajectories effectively
 
   Examples with sampling performance:
   - `sample_size: 100` → 10k comparisons (fast, good for exploration)
@@ -462,7 +462,7 @@ defmodule Ranktration do
         end
       end)
 
-      # Sample trajectories for scalability (handles millions of trajectories)
+      # Sample trajectories for efficient scalability
       sampled_trajectories = sample_trajectories(trajectories, ruler.sample_size)
 
       # Perform pairwise comparisons on sample
