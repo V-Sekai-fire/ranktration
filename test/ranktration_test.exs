@@ -316,6 +316,78 @@ defmodule RanktrationTest do
       # Should return b.trajectory_id since a > b alphabetically
       assert comparison.preferred == "a_traject"
     end
+
+    test "demonstrates performance gradients with 8+ trajectories" do
+      # Create 8 trajectories with distinct performance profiles to show gradients
+      trajectories = [
+        # Precision Expert: High accuracy, poor speed
+        TrajectoryResult.new("precision_expert", "gradient_test", Ranktration.Metrics.new(accuracy: 0.95, speed: 0.4, robustness: 0.7)),
+        # Speed Demon: Fast but inaccurate
+        TrajectoryResult.new("speed_demon", "gradient_test", Ranktration.Metrics.new(accuracy: 0.6, speed: 0.95, robustness: 0.5)),
+        # All-Rounder: Balanced performer
+        TrajectoryResult.new("all_rounder", "gradient_test", Ranktration.Metrics.new(accuracy: 0.8, speed: 0.8, robustness: 0.8)),
+        # Robust Specialist: Resilient but average
+        TrajectoryResult.new("robust_specialist", "gradient_test", Ranktration.Metrics.new(accuracy: 0.7, speed: 0.6, robustness: 0.95)),
+        # Efficiency Focus: Good accuracy/speed balance
+        TrajectoryResult.new("efficiency_focus", "gradient_test", Ranktration.Metrics.new(accuracy: 0.75, speed: 0.85, robustness: 0.7)),
+        # Underperformer: Poor across all metrics
+        TrajectoryResult.new("underperformer", "gradient_test", Ranktration.Metrics.new(accuracy: 0.5, speed: 0.5, robustness: 0.4)),
+        # Mixed Bag: Strong speed, decent accuracy
+        TrajectoryResult.new("mixed_bag", "gradient_test", Ranktration.Metrics.new(accuracy: 0.7, speed: 0.9, robustness: 0.6)),
+        # Elite Hybrid: Near-perfect across all
+        TrajectoryResult.new("elite_hybrid", "gradient_test", Ranktration.Metrics.new(accuracy: 0.9, speed: 0.9, robustness: 0.8))
+      ]
+
+      # Test 1: Accuracy-heavy weighting (70% accuracy, 20% speed, 10% robustness)
+      # Expected ranking: elite_hybrid > all_rounder > precision_expert > efficiency_focus > mixed_bag > robust_specialist > speed_demon > underperformer
+      accuracy_first = RulerCore.new(metric_weights: %{"accuracy" => 0.7, "speed" => 0.2, "robustness" => 0.1})
+      result_accuracy = RulerCore.evaluate_trajectories(accuracy_first, trajectories, "gradient_test")
+
+      assert List.first(result_accuracy.rankings) == "elite_hybrid"
+      assert List.first(result_accuracy.rankings) != "precision_expert"
+      elite_hybrid_idx = Enum.find_index(result_accuracy.rankings, &(&1 == "elite_hybrid"))
+      precision_idx = Enum.find_index(result_accuracy.rankings, &(&1 == "precision_expert"))
+      speed_idx = Enum.find_index(result_accuracy.rankings, &(&1 == "speed_demon"))
+      underperformer_idx = Enum.find_index(result_accuracy.rankings, &(&1 == "underperformer"))
+      assert elite_hybrid_idx < precision_idx  # Elite hybrid beats precision when accuracy is weighted heavily
+      assert precision_idx < speed_idx  # Precision still beats speed
+      assert speed_idx < underperformer_idx  # Speed beats underperformer
+
+      # Test 2: Speed-heavy weighting (70% speed, 20% accuracy, 10% robustness)
+      # Expected: elite_hybrid > speed_demon > mixed_bag > efficiency_focus > all_rounder > robust_specialist > precision_expert > underperformer
+      speed_first = RulerCore.new(metric_weights: %{"speed" => 0.7, "accuracy" => 0.2, "robustness" => 0.1})
+      result_speed = RulerCore.evaluate_trajectories(speed_first, trajectories, "gradient_test")
+
+      assert List.first(result_speed.rankings) == "elite_hybrid"
+      assert List.first(result_speed.rankings) != "speed_demon"
+      elite_hybrid_idx = Enum.find_index(result_speed.rankings, &(&1 == "elite_hybrid"))
+      speed_idx = Enum.find_index(result_speed.rankings, &(&1 == "speed_demon"))
+      assert elite_hybrid_idx < speed_idx  # Elite hybrid beats speed demon when speed is weighted heavily
+      elite_hybrid_score = result_speed.scores["elite_hybrid"]
+      speed_score = result_speed.scores["speed_demon"]
+      assert elite_hybrid_score > speed_score # Elite hybrid has higher speed-weighted score
+
+      # Test 3: Balanced weighting (33% each)
+      # Expected: elite_hybrid > all_rounder > efficiency_focus > robust_specialist > mixed_bag > precision_expert > speed_demon > underperformer
+      balanced = RulerCore.new(metric_weights: %{"accuracy" => 0.33, "speed" => 0.33, "robustness" => 0.34})
+      result_balanced = RulerCore.evaluate_trajectories(balanced, trajectories, "gradient_test")
+
+      assert List.first(result_balanced.rankings) == "elite_hybrid"
+      elite_idx_balanced = Enum.find_index(result_balanced.rankings, &(&1 == "elite_hybrid"))
+      all_rounder_idx = Enum.find_index(result_balanced.rankings, &(&1 == "all_rounder"))
+      assert elite_idx_balanced < all_rounder_idx  # Elite hybrid beats all-rounder in balanced scoring
+
+      # Verify gradient: elite hybrid has the highest score in balanced evaluation
+      scores = result_balanced.scores
+      assert scores["elite_hybrid"] > scores["all_rounder"]
+      assert scores["all_rounder"] > scores["efficiency_focus"]
+      assert scores["underperformer"] < scores["precision_expert"]  # Even underperformer beats worst performers
+
+      # All results should have reasonable confidence due to clear gradients
+      assert result_accuracy.confidence > 0.2
+      assert result_speed.confidence > 0.2
+      assert result_balanced.confidence > 0.2
+    end
   end
 
   describe "evaluate_trajectories" do
